@@ -25,21 +25,24 @@ jobs:
           test -f ansible/inventory.ini
           echo "Files OK"
 
-      - name: Build Docker image locally
+      - name: Build image
         run: |
           docker build -t $FULL_IMAGE_NAME:${{ github.sha }} ./docker
           docker tag $FULL_IMAGE_NAME:${{ github.sha }} $FULL_IMAGE_NAME:latest
           docker images | grep bc-browser
 
-      - name: Scan built image with Trivy
+      - name: Export image to tar
+        run: |
+          docker save -o /tmp/bc-browser.tar $FULL_IMAGE_NAME:${{ github.sha }}
+
+      - name: Scan exported image with Trivy
         run: |
           trivy image \
-            --image-src docker \
+            --input /tmp/bc-browser.tar \
             --scanners vuln \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
-            --exit-code 1 \
-            $FULL_IMAGE_NAME:${{ github.sha }}
+            --exit-code 1
 
       - name: Login to Harbor
         run: |
