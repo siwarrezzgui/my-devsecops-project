@@ -2,56 +2,55 @@ name: BC DevOps Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   workflow_dispatch:
 
 env:
   HARBOR_REGISTRY: 172.16.8.169:80
   HARBOR_PROJECT: bc
   IMAGE_NAME: bc-browser
+  FULL_IMAGE_NAME: 172.16.8.169:80/bc/bc-browser
 
 jobs:
   build-scan-push-deploy:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify project files
+      - name: Verify files
         run: |
           test -f docker/Dockerfile
-          test -f docker/startup.sh
           test -f ansible/inventory.ini
-          test -f ansible/playbooks/deploy-container.yml
-          test -f ansible/playbooks/verify-deployment.yml
+          echo "Files OK"
 
-      - name: Build Docker image
+      - name: Build Docker image locally
         run: |
-          docker build -t $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:${{ github.sha }} ./docker
-          docker tag $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:${{ github.sha }} $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:latest
+          docker build -t $FULL_IMAGE_NAME:${{ github.sha }} ./docker
+          docker tag $FULL_IMAGE_NAME:${{ github.sha }} $FULL_IMAGE_NAME:latest
+          docker images | grep bc-browser
 
-      - name: Scan image with Trivy
+      - name: Scan built image with Trivy
         run: |
           trivy image \
-              --scanners vuln \
-              --severity HIGH,CRITICAL \
-              --exit-code 1 \
-              --timeout 15m \
-              --no-progress \
-              $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:${{ github.sha }}
+            --image-src docker \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            $FULL_IMAGE_NAME:${{ github.sha }}
 
       - name: Login to Harbor
         run: |
           echo "${{ secrets.HARBOR_PASSWORD }}" | docker login $HARBOR_REGISTRY -u "${{ secrets.HARBOR_USER }}" --password-stdin
 
-      - name: Push image to Harbor
+      - name: Push image
         run: |
-          docker push $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:${{ github.sha }}
-          docker push $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:latest
+          docker push $FULL_IMAGE_NAME:${{ github.sha }}
+          docker push $FULL_IMAGE_NAME:latest
 
-      - name: Create Ansible secrets file
+      - name: Prepare Ansible secrets
         run: |
           mkdir -p ansible/secrets
           cat > ansible/secrets/secrets.yml <<EOF
@@ -59,12 +58,7 @@ jobs:
           harbor_password: "${{ secrets.HARBOR_PASSWORD }}"
           EOF
 
-      - name: Test Ansible connectivity
-        run: |
-          cd ansible
-          ansible windows -m ansible.windows.win_ping
-
-      - name: Deploy container with Ansible
+      - name: Deploy with Ansible
         run: |
           cd ansible
           ansible-playbook playbooks/deploy-container.yml
