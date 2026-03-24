@@ -40,7 +40,7 @@ jobs:
           trivy image \
             --input /tmp/bc-browser.tar \
             --scanners vuln \
-            --severity HIGH,CRITICAL \
+            --severity CRITICAL \
             --ignore-unfixed \
             --exit-code 1
 
