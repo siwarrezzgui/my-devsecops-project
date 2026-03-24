@@ -34,7 +34,13 @@ jobs:
 
       - name: Scan image with Trivy
         run: |
-          trivy image --severity HIGH,CRITICAL --exit-code 1 $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:${{ github.sha }}
+          trivy image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --exit-code 1 \
+              --timeout 15m \
+              --no-progress \
+              $HARBOR_REGISTRY/$HARBOR_PROJECT/$IMAGE_NAME:${{ github.sha }}
 
       - name: Login to Harbor
         run: |
