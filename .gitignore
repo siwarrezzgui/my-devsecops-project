@@ -1,0 +1,38 @@
+# Git
+.git
+
+# Python / Ansible
+*.retry
+__pycache__/
+
+# Secrets
+ansible/secrets/secrets.yml
+*.vault
+*.secret
+*.log
+
+# Harbor runtime / generated files
+harbor/harbor/
+harbor/common/
+harbor/data/
+harbor/database/
+harbor/redis/
+harbor/trivy/
+harbor/chartmuseum/
+harbor/jobservice/
+harbor/portal/
+harbor/core/
+harbor/registry/
+harbor/nginx/
+harbor/prepare
+harbor/install.sh
+harbor/*.tgz
+
+# Monitoring
+monitoring/data/
+monitoring/grafana-storage/
+
+# OS / editor
+*.swp
+*.tmp
+.DS_Store

@@ -1,0 +1,49 @@
+---
+- name: Déployer le conteneur Business Central depuis Harbor
+  hosts: windows
+  gather_facts: no
+  vars_files:
+    - ../secrets/secrets.yml
+
+  tasks:
+    - name: Créer dossier docker config
+      ansible.windows.win_file:
+        path: C:\Users\ansible\.docker
+        state: directory
+
+    - name: Configurer authentification Harbor
+      ansible.windows.win_copy:
+        dest: C:\Users\ansible\.docker\config.json
+        content: |
+          {
+            "auths": {
+              "{{ harbor_registry }}": {
+                "auth": "{{ (harbor_user + ':' + harbor_password) | b64encode }}"
+              }
+            }
+          }
+
+    - name: Pull image depuis Harbor
+      ansible.windows.win_command: >
+        docker pull {{ harbor_registry }}/{{ harbor_project }}/{{ harbor_image }}:{{ harbor_tag }}
+
+    - name: Supprimer ancien conteneur s'il existe
+      ansible.windows.win_shell: |
+        docker rm -f bc-test 2>$null
+      ignore_errors: yes
+
+    - name: Lancer nouveau conteneur
+      ansible.windows.win_command: >
+        docker run -d
+        --name bc-test
+        -p 3000:3000
+        --shm-size=1gb
+        {{ harbor_registry }}/{{ harbor_project }}/{{ harbor_image }}:{{ harbor_tag }}
+
+    - name: Vérifier conteneur
+      ansible.windows.win_command: docker ps
+      register: result
+
+    - name: Afficher conteneurs
+      debug:
+        var: result.stdout

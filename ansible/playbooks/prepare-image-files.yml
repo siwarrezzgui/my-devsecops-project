@@ -1,0 +1,19 @@
+---
+- name: Préparer l'arborescence sur Windows
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Créer le dossier principal
+      ansible.windows.win_file:
+        path: "{{ project_dir }}"
+        state: directory
+
+    - name: Créer le dossier scripts
+      ansible.windows.win_file:
+        path: "{{ scripts_dir }}"
+        state: directory
+
+    - name: Créer le dossier config
+      ansible.windows.win_file:
+        path: "{{ config_dir }}"
+        state: directory

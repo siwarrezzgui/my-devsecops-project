@@ -1,0 +1,18 @@
+project_dir: 'C:\bc-container'
+scripts_dir: 'C:\bc-container\scripts'
+config_dir: 'C:\bc-container\config'
+
+harbor_registry: "172.16.8.161:80"
+harbor_project: "bc"
+harbor_image: "bc-browser"
+harbor_tag: "latest"
+
+bc_url: "https://businesscentral.dynamics.com/"
+base_image: "lscr.io/linuxserver/webtop:ubuntu-kde"
+
+vscode_extensions:
+  - ms-dynamics-smb.al
+  - ms-vscode.powershell
+  - github.copilot
+  - mhutchie.git-graph
+  - eamodio.gitlens

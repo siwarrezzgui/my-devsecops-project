@@ -1,0 +1,22 @@
+---
+- name: Vérifier le déploiement Docker sur Windows
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Vérifier que le conteneur bc-test tourne
+      ansible.windows.win_command: docker ps
+      register: docker_ps
+
+    - name: Afficher docker ps
+      debug:
+        var: docker_ps.stdout
+
+    - name: Vérifier que le port 3000 écoute
+      ansible.windows.win_shell: |
+        netstat -ano | findstr :3000
+      register: port_check
+      failed_when: port_check.rc != 0
+
+    - name: Afficher statut port 3000
+      debug:
+        var: port_check.stdout
