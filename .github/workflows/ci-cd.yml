@@ -24,7 +24,12 @@ jobs:
           test -f docker/Dockerfile
           test -f ansible/inventory.ini
           echo "Files OK"
-      
+      - name: Scan secrets with Gitleaks
+        run: |
+          docker run --rm \
+          -v "${{ github.workspace }}:/repo" \
+           zricethezav/gitleaks:latest \
+           detect --source /repo --redact --verbose --exit-code 1
       - name: Build image
         run: |
           docker build -t $FULL_IMAGE_NAME:${{ github.sha }} ./docker
