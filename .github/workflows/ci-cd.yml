@@ -2,7 +2,8 @@ name: BC DevOps Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   workflow_dispatch:
 
 env:
@@ -18,24 +19,34 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Verify files
         run: |
           test -f docker/Dockerfile
           test -f ansible/inventory.ini
+          test -f sonar-project.properties
           echo "Files OK"
+
       - name: Install Gitleaks
         run: |
-           wget -qO gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
-           tar -xzf gitleaks.tar.gz
-           chmod +x ./gitleaks
-           ./gitleaks version
+          cd /tmp
+          wget -qO gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          tar -xzf gitleaks.tar.gz
+          chmod +x ./gitleaks
+          sudo mv ./gitleaks /usr/local/bin/gitleaks
+          gitleaks version
 
       - name: Scan secrets with Gitleaks
         run: |
-            ./gitleaks detect --source . --redact --verbose --exit-code 1
-      
-      
+          gitleaks detect \
+            --source . \
+            --redact \
+            --verbose \
+            --exit-code 1 \
+            --no-banner
+
       - name: Check SonarQube URL
         run: |
           curl -s "${{ vars.SONAR_HOST_URL }}/api/system/status"
@@ -64,20 +75,12 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-      
-      
-      
-      
-      
+
       - name: Build image
         run: |
           docker build -t $FULL_IMAGE_NAME:${{ github.sha }} ./docker
           docker tag $FULL_IMAGE_NAME:${{ github.sha }} $FULL_IMAGE_NAME:latest
           docker images | grep bc-browser
-      
-      
-
-
 
       - name: Export image to tar
         run: |
@@ -96,11 +99,6 @@ jobs:
         run: |
           echo "${{ secrets.HARBOR_PASSWORD }}" | docker login $HARBOR_REGISTRY -u "${{ secrets.HARBOR_USER }}" --password-stdin
 
-      - name: Push image
-        run: |
-          docker push $FULL_IMAGE_NAME:${{ github.sha }}
-          docker push $FULL_IMAGE_NAME:latest
-
       - name: Prepare Ansible secrets
         run: |
           mkdir -p ansible/secrets
@@ -108,6 +106,11 @@ jobs:
           harbor_user: "${{ secrets.HARBOR_USER }}"
           harbor_password: "${{ secrets.HARBOR_PASSWORD }}"
           EOF
+
+      - name: Push image
+        run: |
+          docker push $FULL_IMAGE_NAME:${{ github.sha }}
+          docker push $FULL_IMAGE_NAME:latest
 
       - name: Deploy with Ansible
         run: |
