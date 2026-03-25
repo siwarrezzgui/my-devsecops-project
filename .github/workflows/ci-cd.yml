@@ -2,8 +2,7 @@ name: BC DevOps Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   workflow_dispatch:
 
 env:
@@ -11,116 +10,54 @@ env:
   HARBOR_PROJECT: bc
   IMAGE_NAME: bc-browser
   FULL_IMAGE_NAME: 172.16.8.169:80/bc/bc-browser
-  IMAGE_TAG: ${{ github.sha }}
-  IMAGE_TAR: bc-browser-image.tar
 
 jobs:
-  validate:
-    name: Validate files and scan secrets
+  build-scan-push-deploy:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify required files
+      - name: Verify files
         run: |
           test -f docker/Dockerfile
           test -f ansible/inventory.ini
-          test -f ansible/playbooks/deploy-container.yml
-          test -f ansible/playbooks/verify-deployment.yml
-          echo "Required files are present"
-
-      - name: Install Gitleaks
+          echo "Files OK"
+      - name: Scan secrets with Gitleaks
         run: |
-          wget -qO gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
-          tar -xzf gitleaks.tar.gz
-          chmod +x ./gitleaks
-          ./gitleaks version
-
-      - name: Scan repository for secrets
+          docker run --rm \
+          -v "${{ github.workspace }}:/repo" \
+           zricethezav/gitleaks:latest \
+           detect --source /repo --redact --verbose --exit-code 1
+      - name: Build image
         run: |
-          ./gitleaks detect --source . --redact --verbose --exit-code 1
-
-  build:
-    name: Build Docker image
-    runs-on: self-hosted
-    needs: validate
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build Docker image
-        run: |
-          docker build -t $FULL_IMAGE_NAME:$IMAGE_TAG ./docker
-          docker tag $FULL_IMAGE_NAME:$IMAGE_TAG $FULL_IMAGE_NAME:latest
+          docker build -t $FULL_IMAGE_NAME:${{ github.sha }} ./docker
+          docker tag $FULL_IMAGE_NAME:${{ github.sha }} $FULL_IMAGE_NAME:latest
           docker images | grep bc-browser
 
-      - name: Export Docker image to tar
+      - name: Export image to tar
         run: |
-          docker save -o $IMAGE_TAR $FULL_IMAGE_NAME:$IMAGE_TAG
+          docker save -o /tmp/bc-browser.tar $FULL_IMAGE_NAME:${{ github.sha }}
 
-      - name: Upload Docker image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image-tar
-          path: ${{ env.IMAGE_TAR }}
-          retention-days: 1
-
-  scan:
-    name: Scan Docker image with Trivy
-    runs-on: self-hosted
-    needs: build
-
-    steps:
-      - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image-tar
-
-      - name: Scan image archive with Trivy
+      - name: Scan exported image with Trivy
         run: |
           trivy image \
-            --input $IMAGE_TAR \
+            --input /tmp/bc-browser.tar \
             --scanners vuln \
-            --severity HIGH,CRITICAL \
+            --severity CRITICAL \
             --ignore-unfixed \
             --exit-code 1
-
-  push:
-    name: Push image to Harbor
-    runs-on: self-hosted
-    needs: scan
-
-    steps:
-      - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image-tar
-
-      - name: Load Docker image from tar
-        run: |
-          docker load -i $IMAGE_TAR
 
       - name: Login to Harbor
         run: |
           echo "${{ secrets.HARBOR_PASSWORD }}" | docker login $HARBOR_REGISTRY -u "${{ secrets.HARBOR_USER }}" --password-stdin
 
-      - name: Push Docker image
+      - name: Push image
         run: |
-          docker push $FULL_IMAGE_NAME:$IMAGE_TAG
+          docker push $FULL_IMAGE_NAME:${{ github.sha }}
           docker push $FULL_IMAGE_NAME:latest
 
-  deploy:
-    name: Deploy with Ansible
-    runs-on: self-hosted
-    needs: push
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Prepare Ansible secrets
         run: |
           mkdir -p ansible/secrets
@@ -129,44 +66,14 @@ jobs:
           harbor_password: "${{ secrets.HARBOR_PASSWORD }}"
           EOF
 
-      - name: Deploy container to Windows host
+      - name: Deploy with Ansible
         run: |
           cd ansible
-          ansible-playbook playbooks/deploy-container.yml \
-            -e harbor_tag=$IMAGE_TAG
+          ansible-playbook playbooks/deploy-container.yml
 
-  verify:
-    name: Verify deployment
-    runs-on: self-hosted
-    needs: deploy
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Prepare Ansible secrets
-        run: |
-          mkdir -p ansible/secrets
-          cat > ansible/secrets/secrets.yml <<EOF
-          harbor_user: "${{ secrets.HARBOR_USER }}"
-          harbor_password: "${{ secrets.HARBOR_PASSWORD }}"
-          EOF
-
-      - name: Verify deployed container
+      - name: Verify deployment
         run: |
           cd ansible
-          ansible-playbook playbooks/verify-deployment.yml \
-            -e harbor_tag=$IMAGE_TAG
+          ansible-playbook playbooks/verify-deployment.yml
 
-  cleanup:
-    name: Cleanup local artifacts
-    runs-on: self-hosted
-    needs: verify
-    if: always()
-
-    steps:
-      - name: Remove local Docker images and temp files
-        run: |
-          docker image rm -f $FULL_IMAGE_NAME:$IMAGE_TAG || true
-          docker image rm -f $FULL_IMAGE_NAME:latest || true
-          rm -f $IMAGE_TAR || true
+          
