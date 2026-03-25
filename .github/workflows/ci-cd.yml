@@ -28,12 +28,22 @@ jobs:
           test -f sonar-project.properties
           echo "Files OK"
 
+      - name: Install Gitleaks
+        run: |
+           wget -qO gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+           tar -xzf gitleaks.tar.gz
+           chmod +x ./gitleaks
+           ./gitleaks version
+
       - name: Scan secrets with Gitleaks
         run: |
-          docker run --rm \
-            -v "${{ github.workspace }}:/repo" \
-            zricethezav/gitleaks:latest \
-            detect --source /repo --redact --verbose --exit-code 1
+            ./gitleaks detect --source . --redact --verbose --exit-code 1
+      - name: Build image
+        run: |
+          docker build -t $FULL_IMAGE_NAME:${{ github.sha }} ./docker
+          docker tag $FULL_IMAGE_NAME:${{ github.sha }} $FULL_IMAGE_NAME:latest
+          docker images | grep bc-browser
+
 
       - name: Check SonarQube URL
         run: |
