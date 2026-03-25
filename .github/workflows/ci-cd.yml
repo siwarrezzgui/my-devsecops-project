@@ -39,14 +39,14 @@ jobs:
 
       - name: Scan secrets with Gitleaks
         run: |
-          ./gitleaks detect  --source  .  --redact --verbose --exit-code 1
+          ./gitleaks detect  --no-git --source  .  --redact --verbose --exit-code 1
 
       
 
       
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v4
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
