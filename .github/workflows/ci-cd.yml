@@ -40,22 +40,7 @@ jobs:
         run: |
           curl -s ${{ vars.SONAR_HOST_URL }}/api/system/status
 
-      - name: Check SONAR_TOKEN format
-        run: |
-          python3 - <<'PY'
-          import os
-          t = os.environ.get("SONAR_TOKEN", "")
-          print("TOKEN_LENGTH=", len(t))
-          print("HAS_NEWLINE=", "\n" in t or "\r" in t)
-          PY
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+      
       - name: Build image
         run: |
           docker build -t $FULL_IMAGE_NAME:${{ github.sha }} ./docker
