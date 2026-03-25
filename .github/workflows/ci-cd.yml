@@ -40,7 +40,14 @@ jobs:
         run: |
           /tmp/gitleaks detect --no-git --source . --redact --verbose --exit-code 1
       
-
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true
       
 
       
