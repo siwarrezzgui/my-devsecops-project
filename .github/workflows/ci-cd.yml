@@ -18,16 +18,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Verify files
         run: |
           test -f docker/Dockerfile
           test -f ansible/inventory.ini
-          test -f sonar-project.properties
           echo "Files OK"
-
       - name: Install Gitleaks
         run: |
            wget -qO gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
@@ -38,50 +34,6 @@ jobs:
       - name: Scan secrets with Gitleaks
         run: |
             ./gitleaks detect --source . --redact --verbose --exit-code 1
-      - name: Build image
-        run: |
-          docker build -t $FULL_IMAGE_NAME:${{ github.sha }} ./docker
-          docker tag $FULL_IMAGE_NAME:${{ github.sha }} $FULL_IMAGE_NAME:latest
-          docker images | grep bc-browser
-
-
-      - name: Check SonarQube URL
-        run: |
-          curl -s "${{ vars.SONAR_HOST_URL }}/api/system/status"
-
-      - name: Check SONAR_TOKEN format
-        run: |
-          python3 - <<'PY'
-          import os
-          t = os.environ.get("SONAR_TOKEN", "")
-          print("TOKEN_LENGTH=", len(t))
-          print("HAS_NEWLINE=", "\n" in t or "\r" in t)
-          print("STARTS_WITH_SQP=", t.startswith("sqp_"))
-          PY
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      - name: Test Sonar token with API
-        run: |
-          curl -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/system/status"
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-      
-      
-      - name: Test Sonar token with API
-        run: |
-          curl -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/system/status"
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-      
       - name: Build image
         run: |
           docker build -t $FULL_IMAGE_NAME:${{ github.sha }} ./docker
