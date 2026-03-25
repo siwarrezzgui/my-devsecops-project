@@ -39,7 +39,7 @@ jobs:
 
       - name: Scan secrets with Gitleaks
         run: |
-          ./gitleaks detect  --no-git --source  .  --redact --verbose --exit-code 1
+          ./gitleaks detect  --source  .  --redact --verbose --exit-code 1
 
       
 
