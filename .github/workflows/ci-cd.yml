@@ -45,14 +45,14 @@ jobs:
 
       
 
-      - name: Test Sonar token with API
-        run: |
-          AUTH=$(printf "%s:" "${SONAR_TOKEN}" | base64 | tr -d '\n')
-          curl -H "Authorization: Basic ${AUTH}" \
-              "${SONAR_HOST_URL}/api/system/status"
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v4
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true
 
       - name: Build image
         run: |
