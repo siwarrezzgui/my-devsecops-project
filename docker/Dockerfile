@@ -1,5 +1,4 @@
-FROM lscr.io/linuxserver/webtop:ubuntu-kde
-
+FROM lscr.io/linuxserver/webtop:ubuntu-xfce
 LABEL maintainer="siwarr560@gmail.com"
 LABEL description="Business Central Browser + VS Code"
 LABEL version="1.0"
