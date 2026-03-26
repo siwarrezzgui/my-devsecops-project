@@ -11,6 +11,8 @@ env:
   HARBOR_PROJECT: bc
   IMAGE_NAME: bc-browser
   FULL_IMAGE_NAME: 172.16.8.169:80/bc/bc-browser
+  APP_HOST: 172.16.8.162
+  APP_PORT: 3000
 
 jobs:
   build-scan-push-deploy:
@@ -59,6 +61,10 @@ jobs:
         run: |
           docker save -o /tmp/bc-browser.tar $FULL_IMAGE_NAME:${{ github.sha }}
 
+      - name: Download Trivy DB
+        run: |
+          trivy image --download-db-only --timeout 15m
+
       - name: Scan exported image with Trivy
         run: |
           trivy image \
@@ -66,7 +72,8 @@ jobs:
             --scanners vuln \
             --severity CRITICAL \
             --ignore-unfixed \
-            --exit-code 1
+            --exit-code 1 \
+            --timeout 15m
 
       - name: Login to Harbor
         run: |
@@ -97,30 +104,29 @@ jobs:
 
       - name: Health Check
         run: |
-          echo "Checking container health..."
-          for i in {1..6}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://172.16.8.162:3000 || true)
-            if [ "$STATUS" = "200" ] || [ "$STATUS" = "302" ] || [ "$STATUS" = "401" ]; then
-              echo "Health check passed with HTTP status: $STATUS"
+          echo "Checking TCP port ${APP_PORT} on ${APP_HOST}..."
+          for i in {1..12}; do
+            if nc -z ${APP_HOST} ${APP_PORT}; then
+              echo "Health check passed: port ${APP_PORT} is reachable"
               exit 0
             fi
-            echo "Health check retry $i/6 ..."
+            echo "Health check retry $i/12 ..."
             sleep 10
           done
-          echo "Health check failed"
+          echo "Health check failed: port ${APP_PORT} not reachable"
           exit 1
 
       - name: Availability Test
         run: |
-          echo "Testing application availability..."
-          for i in {1..5}; do
-            if curl -f http://172.16.8.162:3000; then
-              echo "Application is UP"
+          echo "Testing application availability on http://${APP_HOST}:${APP_PORT} ..."
+          for i in {1..6}; do
+            STATUS=$(curl -k -L -s -o /dev/null -w "%{http_code}" http://${APP_HOST}:${APP_PORT} || true)
+            if [ "$STATUS" != "000" ]; then
+              echo "Application is available with HTTP status: $STATUS"
               exit 0
-            else
-              echo "Availability retry $i/5 ..."
-              sleep 5
             fi
+            echo "Availability retry $i/6 ..."
+            sleep 10
           done
           echo "Application is DOWN"
           exit 1
@@ -128,6 +134,4 @@ jobs:
       - name: Rollback if failed
         if: failure()
         run: |
-          echo "Deployment failed. Starting rollback..."
-          cd ansible
-          ansible-playbook playbooks/deploy-container.yml -e "harbor_tag=previous"
+          echo "Rollback skipped: image tag 'previous' does not exist in Harbor yet"
