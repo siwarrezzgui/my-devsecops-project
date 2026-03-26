@@ -2,13 +2,13 @@ project_dir: 'C:\bc-container'
 scripts_dir: 'C:\bc-container\scripts'
 config_dir: 'C:\bc-container\config'
 
-harbor_registry: "172.16.8.161:80"
+harbor_registry: "172.16.8.169:80"
 harbor_project: "bc"
 harbor_image: "bc-browser"
 harbor_tag: "latest"
 
 bc_url: "https://businesscentral.dynamics.com/"
-base_image: "lscr.io/linuxserver/webtop:ubuntu-kde"
+base_image: "lscr.io/linuxserver/webtop:ubuntu-xfce"
 
 vscode_extensions:
   - ms-dynamics-smb.al
