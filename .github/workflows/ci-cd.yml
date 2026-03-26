@@ -26,7 +26,6 @@ jobs:
         run: |
           test -f docker/Dockerfile
           test -f ansible/inventory.ini
-         
           test -f sonar-project.properties
           echo "Files OK"
 
@@ -40,7 +39,7 @@ jobs:
       - name: Scan secrets with Gitleaks
         run: |
           /tmp/gitleaks detect --no-git --source . --redact --verbose --exit-code 1
-      
+
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
@@ -49,10 +48,6 @@ jobs:
         with:
           args: >
             -Dsonar.qualitygate.wait=true
-
-
-
-      
 
       - name: Build image
         run: |
@@ -99,3 +94,40 @@ jobs:
         run: |
           cd ansible
           ansible-playbook playbooks/verify-deployment.yml
+
+      - name: Health Check
+        run: |
+          echo "Checking container health..."
+          for i in {1..6}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://172.30.90.2:3000 || true)
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "302" ] || [ "$STATUS" = "401" ]; then
+              echo "Health check passed with HTTP status: $STATUS"
+              exit 0
+            fi
+            echo "Health check retry $i/6 ..."
+            sleep 10
+          done
+          echo "Health check failed"
+          exit 1
+
+      - name: Availability Test
+        run: |
+          echo "Testing application availability..."
+          for i in {1..5}; do
+            if curl -f http://172.30.90.2:3000; then
+              echo "Application is UP"
+              exit 0
+            else
+              echo "Availability retry $i/5 ..."
+              sleep 5
+            fi
+          done
+          echo "Application is DOWN"
+          exit 1
+
+      - name: Rollback if failed
+        if: failure()
+        run: |
+          echo "Deployment failed. Starting rollback..."
+          cd ansible
+          ansible-playbook playbooks/deploy-container.yml -e "harbor_tag=previous"
