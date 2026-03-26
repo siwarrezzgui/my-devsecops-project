@@ -133,6 +133,9 @@ jobs:
           echo "Application is DOWN"
           exit 1
 
+
+
+
       - name: Rollback if failed
         if: failure()
         run: |
