@@ -6,22 +6,11 @@
     - ../secrets/secrets.yml
 
   tasks:
-    - name: Créer dossier docker config
-      ansible.windows.win_file:
-        path: C:\Users\ansible\.docker
-        state: directory
-
-    - name: Configurer authentification Harbor
-      ansible.windows.win_copy:
-        dest: C:\Users\ansible\.docker\config.json
-        content: |
-          {
-            "auths": {
-              "{{ harbor_registry }}": {
-                "auth": "{{ (harbor_user + ':' + harbor_password) | b64encode }}"
-              }
-            }
-          }
+    - name: Login à Harbor
+      ansible.windows.win_shell: >
+        docker login {{ harbor_registry }}
+        -u {{ harbor_user }}
+        -p {{ harbor_password }}
 
     - name: Pull image depuis Harbor
       ansible.windows.win_command: >
