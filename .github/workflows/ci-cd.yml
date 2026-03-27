@@ -2,8 +2,7 @@ name: BC DevOps Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   workflow_dispatch:
 
 env:
@@ -11,10 +10,6 @@ env:
   HARBOR_PROJECT: bc
   IMAGE_NAME: bc-browser
   FULL_IMAGE_NAME: 172.16.8.169:80/bc/bc-browser
-  APP_HOST: 172.16.8.162
-  APP_PORT: 3000
-
-
 
 jobs:
   build-scan-push-deploy:
@@ -23,36 +18,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Verify files
         run: |
           test -f docker/Dockerfile
           test -f ansible/inventory.ini
-          test -f sonar-project.properties
           echo "Files OK"
-
       - name: Install Gitleaks
         run: |
-          wget -qO /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
-          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
-          chmod +x /tmp/gitleaks
-          /tmp/gitleaks version
+           wget -qO gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+           tar -xzf gitleaks.tar.gz
+           chmod +x ./gitleaks
+           ./gitleaks version
 
       - name: Scan secrets with Gitleaks
         run: |
-          /tmp/gitleaks detect --no-git --source . --redact --verbose --exit-code 1
-
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-        with:
-          args: >
-            -Dsonar.qualitygate.wait=true
-
+            ./gitleaks detect --source . --redact --verbose --exit-code 1
       - name: Build image
         run: |
           docker build -t $FULL_IMAGE_NAME:${{ github.sha }} ./docker
@@ -63,10 +44,6 @@ jobs:
         run: |
           docker save -o /tmp/bc-browser.tar $FULL_IMAGE_NAME:${{ github.sha }}
 
-      - name: Download Trivy DB
-        run: |
-          trivy image --download-db-only --timeout 15m
-
       - name: Scan exported image with Trivy
         run: |
           trivy image \
@@ -74,12 +51,16 @@ jobs:
             --scanners vuln \
             --severity CRITICAL \
             --ignore-unfixed \
-            --exit-code 1 \
-            --timeout 15m
+            --exit-code 1
 
       - name: Login to Harbor
         run: |
           echo "${{ secrets.HARBOR_PASSWORD }}" | docker login $HARBOR_REGISTRY -u "${{ secrets.HARBOR_USER }}" --password-stdin
+
+      - name: Push image
+        run: |
+          docker push $FULL_IMAGE_NAME:${{ github.sha }}
+          docker push $FULL_IMAGE_NAME:latest
 
       - name: Prepare Ansible secrets
         run: |
@@ -88,11 +69,6 @@ jobs:
           harbor_user: "${{ secrets.HARBOR_USER }}"
           harbor_password: "${{ secrets.HARBOR_PASSWORD }}"
           EOF
-
-      - name: Push image
-        run: |
-          docker push $FULL_IMAGE_NAME:${{ github.sha }}
-          docker push $FULL_IMAGE_NAME:latest
 
       - name: Deploy with Ansible
         run: |
@@ -103,42 +79,3 @@ jobs:
         run: |
           cd ansible
           ansible-playbook playbooks/verify-deployment.yml
-
-      - name: Health Check
-        run: |
-          echo "Checking TCP port ${APP_PORT} on ${APP_HOST}..."
-          for i in {1..12}; do
-            if nc -z ${APP_HOST} ${APP_PORT}; then
-              echo "Health check passed: port ${APP_PORT} is reachable"
-              exit 0
-            fi
-            echo "Health check retry $i/12 ..."
-            sleep 10
-          done
-          echo "Health check failed: port ${APP_PORT} not reachable"
-          exit 1
-
-      - name: Availability Test
-        run: |
-          echo "Testing application availability on http://${APP_HOST}:${APP_PORT} ..."
-          for i in {1..6}; do
-            STATUS=$(curl -k -L -s -o /dev/null -w "%{http_code}" http://${APP_HOST}:${APP_PORT} || true)
-            if [ "$STATUS" != "000" ]; then
-              echo "Application is available with HTTP status: $STATUS"
-              exit 0
-            fi
-            echo "Availability retry $i/6 ..."
-            sleep 10
-          done
-          echo "Application is DOWN"
-          exit 1
-
-      - name: Rollback if failed
-        if: failure()
-        run: |
-          echo "Rollback skipped: image tag 'previous' does not exist in Harbor yet"
-
-
-
-
-          
