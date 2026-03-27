@@ -49,3 +49,12 @@
     - name: Afficher conteneurs
       debug:
         var: result.stdout
+    - name: Ouvrir le port 3000 dans le firewall Windows
+      ansible.windows.win_firewall_rule:
+        name: "Allow port 3000 BC App"
+        localport: 3000
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
