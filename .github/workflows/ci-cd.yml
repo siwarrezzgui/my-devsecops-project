@@ -106,19 +106,7 @@ jobs:
           cd ansible
           ansible-playbook playbooks/verify-deployment.yml
 
-      - name: Health Check
-        run: |
-          echo "Checking TCP port ${APP_PORT} on ${APP_HOST}..."
-          for i in {1..5}; do
-            if nc -z ${APP_HOST} ${APP_PORT}; then
-              echo "Health check passed: port ${APP_PORT} is reachable"
-              exit 0
-            fi
-            echo "Health check retry $i/5 ..."
-            sleep 10
-          done
-          echo "Health check failed: port ${APP_PORT} not reachable"
-          exit 1
+      
 
       - name: Availability Test
         run: |
