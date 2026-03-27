@@ -1,48 +1,56 @@
 ---
-- name: Déployer le conteneur Business Central depuis Harbor
+- name: Test Harbor avec Docker Desktop Linux Engine
   hosts: windows
   gather_facts: no
   vars_files:
     - ../secrets/secrets.yml
 
   tasks:
-    - name: Login à Harbor
+    - name: Afficher utilisateur courant
+      ansible.windows.win_shell: whoami
+      register: whoami_result
+
+    - debug:
+        var: whoami_result.stdout
+
+    - name: Afficher docker version avec Docker Desktop Linux Engine
       ansible.windows.win_shell: |
         $env:DOCKER_HOST="npipe:////./pipe/dockerDesktopLinuxEngine"
-        {{ harbor_password }} | docker login {{ harbor_registry }} -u {{ harbor_user }} --password-stdin
-      register: login_result
+        docker version
+      register: docker_version_result
 
-    - name: Afficher resultat login
-      debug:
-        var: login_result.stdout
+    - debug:
+        var: docker_version_result.stdout
 
     - name: Pull image depuis Harbor
       ansible.windows.win_shell: |
         $env:DOCKER_HOST="npipe:////./pipe/dockerDesktopLinuxEngine"
         docker pull {{ harbor_registry }}/{{ harbor_project }}/{{ harbor_image }}:{{ harbor_tag }}
+      register: pull_result
 
-    - name: Supprimer ancien conteneur s'il existe
+    - debug:
+        var: pull_result.stdout
+
+    - name: Supprimer ancien conteneur si existe
       ansible.windows.win_shell: |
         $env:DOCKER_HOST="npipe:////./pipe/dockerDesktopLinuxEngine"
         docker rm -f bc-test 2>$null
-      failed_when: false
+      ignore_errors: yes
 
-    - name: Lancer nouveau conteneur
+    - name: Lancer conteneur test
       ansible.windows.win_shell: |
         $env:DOCKER_HOST="npipe:////./pipe/dockerDesktopLinuxEngine"
         docker run -d --name bc-test -p 3000:3000 --shm-size=1gb {{ harbor_registry }}/{{ harbor_project }}/{{ harbor_image }}:{{ harbor_tag }}
       register: run_result
 
-    - name: Afficher resultat lancement
-      debug:
+    - debug:
         var: run_result.stdout
 
-    - name: Vérifier conteneur
+    - name: Vérifier conteneurs
       ansible.windows.win_shell: |
         $env:DOCKER_HOST="npipe:////./pipe/dockerDesktopLinuxEngine"
-        docker ps
-      register: result
+        docker ps -a
+      register: ps_result
 
-    - name: Afficher conteneurs
-      debug:
-        var: result.stdout
+    - debug:
+        var: ps_result.stdout
